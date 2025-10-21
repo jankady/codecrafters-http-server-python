@@ -1,13 +1,7 @@
 import socket  # noqa: F401
+from multiprocessing import Process
 
-
-def main():
-    # You can use print statements as follows for debugging, they'll be visible when running tests.
-    print("Logs from your program will appear here!")
-
-    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
-    conn, addr = server_socket.accept() # wait for client
-
+def handle_client(conn, addr):
     data = conn.recv(1024).decode().strip().split(" ")
 
     print(f"Received request decoded: {data}")
@@ -52,8 +46,8 @@ def main():
                 response_body = ''
                 http_response = (
                     f"{http_version} {http_code}\r\n"
-                    
-                    
+
+
                     f"\r\n"
                     f"{response_body}"
                 )
@@ -66,10 +60,24 @@ def main():
         case "POST":
             pass
 
-
     print(f"Sending response: {http_response}")
     conn.send(http_response.encode())
     conn.close()
+
+def main():
+    # You can use print statements as follows for debugging, they'll be visible when running tests.
+    print("Logs from your program will appear here!")
+
+    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
+
+    while True:
+        conn, addr = server_socket.accept() # wait for client
+
+        process = Process(target=handle_client, args=(conn, addr))
+        process.start()
+        conn.close()
+
+
 
 
 
