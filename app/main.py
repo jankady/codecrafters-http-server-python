@@ -10,26 +10,51 @@ def main():
 
     data = conn.recv(1024).decode().strip().split(" ")
 
-    http_method = data[0]
-    http_path = data[1]
-    http_version = data[2].split("\r\n")[0]
-    http_code = ""
+    print(f"Received request decoded: {data}")
 
-    if http_path != "/":
-        http_code = "404 Not Found"
-    else:
-        http_code = "200 OK"
+    http_method = data[0]
+    http_full_path = data[1]
+    http_version = data[2].split("\r\n")[0]
 
     http_response = ""
     match http_method:
         case "GET":
-            http_response = (
-                f"{http_version} {http_code}\r\n\r\n"
+            if http_full_path.split("/")[1] == "echo":
+                http_code = "200 OK"
+                content_type = "text/plain"
+                content_length = len(http_full_path.split("/")[2])
+                response_body = http_full_path.split("/")[2]
+                http_response = (
+                    f"{http_version} {http_code}\r\n"
+                    f"Content-Type: {content_type}\r\n"
+                    f"Content-Length: {content_length}\r\n"
+                    f"\r\n"
+                    f"{response_body}"
+                )
 
-            )
+            elif http_full_path == "/":
+                http_code = "200 OK"
+                content_type = "text/plain"
+                content_length = 1
+                response_body = ''
+                http_response = (
+                    f"{http_version} {http_code}\r\n"
+                    
+                    
+                    f"\r\n"
+                    f"{response_body}"
+                )
+            else:
+                http_code = "404 Not Found"
+                http_response = (
+                    f"{http_version} {http_code}\r\n\r\n"
+                )
+
         case "POST":
             pass
 
+
+    print(f"Sending response: {http_response}")
     conn.send(http_response.encode())
     conn.close()
 
