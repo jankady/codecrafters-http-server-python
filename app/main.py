@@ -15,6 +15,7 @@ def main():
     http_method = data[0]
     http_full_path = data[1]
     http_version = data[2].split("\r\n")[0]
+    user_agent = data[4].lower() if len(data) > 4 else ""
 
     http_response = ""
     match http_method:
@@ -24,6 +25,18 @@ def main():
                 content_type = "text/plain"
                 content_length = len(http_full_path.split("/")[2])
                 response_body = http_full_path.split("/")[2]
+                http_response = (
+                    f"{http_version} {http_code}\r\n"
+                    f"Content-Type: {content_type}\r\n"
+                    f"Content-Length: {content_length}\r\n"
+                    f"\r\n"
+                    f"{response_body}"
+                )
+            elif http_full_path.split("/")[1].lower() == "user-agent":
+                http_code = "200 OK"
+                content_type = "text/plain"
+                content_length = len(user_agent)
+                response_body = user_agent
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"Content-Type: {content_type}\r\n"
