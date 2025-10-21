@@ -13,19 +13,24 @@ def main():
     http_method = data[0]
     http_path = data[1]
     http_version = data[2].split("\r\n")[0]
+    http_code = ""
 
+    if http_path != "/":
+        http_code = "404 Not Found"
+    else:
+        http_code = "200 OK"
 
-    response = ""
+    http_response = ""
     match http_method:
         case "GET":
-            response = (
-                f"{http_version} 200 OK\r\n\r\n"
+            http_response = (
+                f"{http_version} {http_code}\r\n\r\n"
 
             )
         case "POST":
             pass
 
-    conn.send(response.encode())
+    conn.send(http_response.encode())
     conn.close()
 
 
