@@ -8,7 +8,7 @@ def check_file_exists(path_to_file, directory):
     get_file = os.path.basename(path_to_file)
 
     try:
-        files_in_directory = os.listdir(directory)  # Seznam souborů ve složce
+        files_in_directory = os.listdir(directory) # list of files in the directory
         if get_file in files_in_directory:
             return True
     except Exception:
@@ -16,18 +16,40 @@ def check_file_exists(path_to_file, directory):
 
     return False
 
+def check_directory_exists(directory):
+    try:
+        if os.path.exists(directory) and os.path.isdir(directory):
+            return True
+    except Exception:
+        return False
 
-def generate_response(http_method, http_full_path, http_version, user_agent, path_to_file, directory):
+    return False
+
+def create_file(path_to_file, directory, content_type, content_length, content_body):
+    get_file = os.path.basename(path_to_file)
+    target_file = os.path.join(directory, get_file)
+
+    try:
+        with open(target_file, 'w') as file:
+            file.write(content_body)
+        return True
+    except Exception:
+        return False
+
+    return False
+
+def generate_response(http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body, directory):
     http_response = ""
     match http_method:
         case "GET":
-            if check_file_exists(path_to_file, directory):
-                target_file = os.path.join(directory, os.path.basename(path_to_file))
+            if check_file_exists(http_full_path, directory):
+                target_file = os.path.join(directory, os.path.basename(http_full_path))
                 http_code = "200 OK"
-                content_type = "application/octet-stream"
                 with open(target_file, 'r') as file:
                     response_body = file.read()
+                content_type = "application/octet-stream"
                 content_length = os.path.getsize(target_file)
+
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"Content-Type: {content_type}\r\n"
@@ -48,11 +70,12 @@ def generate_response(http_method, http_full_path, http_version, user_agent, pat
                     f"\r\n"
                     f"{response_body}"
                 )
-            elif http_full_path.split("/")[1].lower() == "user-agent":
+
+            elif user_agent is not None:
                 http_code = "200 OK"
                 content_type = "text/plain"
-                content_length = len(user_agent)
                 response_body = user_agent
+                content_length = len(response_body)
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"Content-Type: {content_type}\r\n"
@@ -60,18 +83,12 @@ def generate_response(http_method, http_full_path, http_version, user_agent, pat
                     f"\r\n"
                     f"{response_body}"
                 )
-
             elif http_full_path == "/":
                 http_code = "200 OK"
-                content_type = "text/plain"
-                content_length = 1
-                response_body = ''
                 http_response = (
                     f"{http_version} {http_code}\r\n"
-
-
                     f"\r\n"
-                    f"{response_body}"
+                    f"{request_body}"
                 )
             else:
                 http_code = "404 Not Found"
@@ -80,27 +97,56 @@ def generate_response(http_method, http_full_path, http_version, user_agent, pat
                 )
 
         case "POST":
-            pass
+            if check_directory_exists(directory):
+                create_file(http_full_path, directory, content_type, content_length, request_body)
+                http_code = "201 Created"
+                http_response = (
+                    f"{http_version} {http_code}\r\n"
+                    f"\r\n"
+                )
+
+            else:
+                http_code = "404 Not Found"
+                http_response = (
+                    f"{http_version} {http_code}\r\n\r\n"
+                )
 
     return http_response
 
+def parse_request(request):
+    sections = request.split("\r\n")
+    request_line = sections[0].split(" ")
+    method = request_line[0]
+    path = request_line[1]
+    version = request_line[2]
 
+    header_host = None
+    content_length = 0
+    content_type = None
+    user_agent = None
+    for header in sections[1:]:
+        if header == "":
+            break
+
+        if header.lower().startswith("host:"):
+            header_host = header.split(" ", 1)[1].strip()
+        elif header.lower().startswith("content-length:"):
+            content_length = int(header.split(" ", 1)[1].strip())
+        elif header.lower().startswith("content-type:"):
+            content_type = header.split(" ", 1)[1].strip()
+        elif header.lower().startswith("user-agent:"):
+            user_agent = header.split(" ", 1)[1].strip()
+
+    request_body = request.split("\r\n\r\n")[1] if "\r\n\r\n" in request else None
+    return method, path, version, header_host, content_type, content_length, user_agent, request_body
 def handle_client(conn, addr):
-    data = conn.recv(1024).decode().strip().split(" ")
-
-    print(f"Received request decoded: {data}")
-
+    data = conn.recv(1024).decode().strip()
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", help="Host directory filepath")
     args = parser.parse_args()
 
-    http_method = data[0]
-    http_full_path = data[1]
-    http_version = data[2].split("\r\n")[0]
-    user_agent = data[4].lower() if len(data) > 4 else ""
-
-    http_response = generate_response(http_method, http_full_path, http_version, user_agent, http_full_path,
-                                      args.directory)
+    http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body = parse_request(data)
+    http_response = generate_response(http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body, args.directory)
 
     print(f"Sending response: {http_response}")
     conn.send(http_response.encode())
