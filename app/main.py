@@ -41,6 +41,12 @@ def create_file(path_to_file, directory, content_type, content_length, content_b
     return False
 
 
+def validate_encoding(encoding_type):
+    if "gzip" in encoding_type:
+        return "gzip"
+    return None
+
+
 def generate_response(http_method, http_full_path, http_version, host,
                       content_type, content_length, user_agent, request_body, directory, encoding_type):
     http_response = ""
@@ -67,7 +73,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                 content_type = "text/plain"
                 content_length = len(http_full_path.split("/")[2])
                 response_body = http_full_path.split("/")[2]
-                if encoding_type == "gzip":
+                if validate_encoding(encoding_type):
                     http_response = (
                         f"{http_version} {http_code}\r\n"
                         f"Content-Encoding: {encoding_type}\r\n"
@@ -139,7 +145,7 @@ def parse_request(request):
     content_length = 0
     content_type = None
     user_agent = None
-    encoding_type = None
+    encoding_type = []
     for header in sections[1:]:
         if header == "":
             break
@@ -153,7 +159,8 @@ def parse_request(request):
         elif header.lower().startswith("user-agent:"):
             user_agent = header.split(" ", 1)[1].strip()
         elif header.lower().startswith("accept-encoding:"):
-            encoding_type = header.split(" ", 1)[1].strip()
+            for enc in header.split(" ", 1)[1].strip().split(","):
+                encoding_type.append(enc.strip())
 
     request_body = request.split("\r\n\r\n")[1] if "\r\n\r\n" in request else None
     return method, path, version, header_host, content_type, content_length, user_agent, request_body, encoding_type
