@@ -8,13 +8,14 @@ def check_file_exists(path_to_file, directory):
     get_file = os.path.basename(path_to_file)
 
     try:
-        files_in_directory = os.listdir(directory) # list of files in the directory
+        files_in_directory = os.listdir(directory)  # list of files in the directory
         if get_file in files_in_directory:
             return True
     except Exception:
         return False
 
     return False
+
 
 def check_directory_exists(directory):
     try:
@@ -24,6 +25,7 @@ def check_directory_exists(directory):
         return False
 
     return False
+
 
 def create_file(path_to_file, directory, content_type, content_length, content_body):
     get_file = os.path.basename(path_to_file)
@@ -38,7 +40,9 @@ def create_file(path_to_file, directory, content_type, content_length, content_b
 
     return False
 
-def generate_response(http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body, directory):
+
+def generate_response(http_method, http_full_path, http_version, host,
+                      content_type, content_length, user_agent, request_body, directory, encoding_type):
     http_response = ""
     match http_method:
         case "GET":
@@ -63,13 +67,23 @@ def generate_response(http_method, http_full_path, http_version, host, content_t
                 content_type = "text/plain"
                 content_length = len(http_full_path.split("/")[2])
                 response_body = http_full_path.split("/")[2]
-                http_response = (
-                    f"{http_version} {http_code}\r\n"
-                    f"Content-Type: {content_type}\r\n"
-                    f"Content-Length: {content_length}\r\n"
-                    f"\r\n"
-                    f"{response_body}"
-                )
+                if encoding_type == "gzip":
+                    http_response = (
+                        f"{http_version} {http_code}\r\n"
+                        f"Content-Encoding: {encoding_type}\r\n"
+                        f"Content-Type: {content_type}\r\n"
+                        f"Content-Length: {content_length}\r\n"
+                        f"\r\n"
+                        f"{response_body}"
+                    )
+                else:
+                    http_response = (
+                        f"{http_version} {http_code}\r\n"
+                        f"Content-Type: {content_type}\r\n"
+                        f"Content-Length: {content_length}\r\n"
+                        f"\r\n"
+                        f"{response_body}"
+                    )
 
             elif user_agent is not None:
                 http_code = "200 OK"
@@ -113,6 +127,7 @@ def generate_response(http_method, http_full_path, http_version, host, content_t
 
     return http_response
 
+
 def parse_request(request):
     sections = request.split("\r\n")
     request_line = sections[0].split(" ")
@@ -124,6 +139,7 @@ def parse_request(request):
     content_length = 0
     content_type = None
     user_agent = None
+    encoding_type = None
     for header in sections[1:]:
         if header == "":
             break
@@ -136,19 +152,25 @@ def parse_request(request):
             content_type = header.split(" ", 1)[1].strip()
         elif header.lower().startswith("user-agent:"):
             user_agent = header.split(" ", 1)[1].strip()
+        elif header.lower().startswith("accept-encoding:"):
+            encoding_type = header.split(" ", 1)[1].strip()
 
     request_body = request.split("\r\n\r\n")[1] if "\r\n\r\n" in request else None
-    return method, path, version, header_host, content_type, content_length, user_agent, request_body
+    return method, path, version, header_host, content_type, content_length, user_agent, request_body, encoding_type
+
+
 def handle_client(conn, addr):
     data = conn.recv(1024).decode().strip()
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", help="Host directory filepath")
     args = parser.parse_args()
 
-    http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body = parse_request(data)
-    http_response = generate_response(http_method, http_full_path, http_version, host, content_type, content_length, user_agent, request_body, args.directory)
+    (http_method, http_full_path, http_version, host, content_type, content_length, user_agent,
+     request_body, encoding_type) = parse_request(data)
 
-    print(f"Sending response: {http_response}")
+    http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
+                                      content_length, user_agent, request_body, args.directory, encoding_type)
+
     conn.send(http_response.encode())
     conn.close()
 
