@@ -42,9 +42,11 @@ def create_file(path_to_file, directory, content_type, content_length, content_b
 
 
 def validate_encoding(encoding_type):
-    if "gzip" in encoding_type:
-        return "gzip"
-    return None
+    result = []
+    for encoding in encoding_type:
+        if encoding in ["gzip", "deflate", "br"]:
+            result.append(encoding)
+    return result
 
 
 def generate_response(http_method, http_full_path, http_version, host,
@@ -73,10 +75,18 @@ def generate_response(http_method, http_full_path, http_version, host,
                 content_type = "text/plain"
                 content_length = len(http_full_path.split("/")[2])
                 response_body = http_full_path.split("/")[2]
-                if validate_encoding(encoding_type):
+                encoding_list = validate_encoding(encoding_type)
+                if encoding_list is not []:
+                    content_encoding = ""
+                    for i in range(len(encoding_list)):
+                        if len(encoding_list) -1 == i:
+                            content_encoding+= encoding_list[i]
+                        else:
+                            content_encoding+= encoding_list[i]+", "
+
                     http_response = (
                         f"{http_version} {http_code}\r\n"
-                        f"Content-Encoding: {encoding_type}\r\n"
+                        f"Content-Encoding: {content_encoding}\r\n"
                         f"Content-Type: {content_type}\r\n"
                         f"Content-Length: {content_length}\r\n"
                         f"\r\n"
