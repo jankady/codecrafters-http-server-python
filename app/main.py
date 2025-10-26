@@ -1,8 +1,8 @@
 import argparse
 import socket  # noqa: F401
-from multiprocessing import Process
 import os
 import gzip
+import threading
 
 def check_file_exists(path_to_file, directory):
     get_file = os.path.basename(path_to_file)
@@ -114,10 +114,10 @@ def generate_response(http_method, http_full_path, http_version, host,
                 ).encode()
             elif http_full_path == "/":
                 http_code = "200 OK"
+
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"\r\n"
-                    f"{request_body}"
                 ).encode()
             else:
                 http_code = "404 Not Found"
@@ -175,15 +175,16 @@ def parse_request(request):
     return method, path, version, header_host, content_type, content_length, user_agent, request_body, encoding_type
 
 
-def handle_client(conn, addr):
-
+def handle_client(conn):
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", help="Host directory filepath")
     args = parser.parse_args()
 
+
     while True:
         data = conn.recv(1024).decode().strip()
         if not data:
+            print("1 No data received, closing connection.")
             break
 
         (http_method, http_full_path, http_version, host, content_type, content_length, user_agent,
@@ -192,7 +193,11 @@ def handle_client(conn, addr):
         http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
                                           content_length, user_agent, request_body, args.directory, encoding_type)
 
-        conn.send(http_response)
+        conn.sendall(http_response)
+
+        if "Connection: close" in data:
+            print("2 Connection close detected, closing connection.")
+            break
 
     conn.close()
 
@@ -203,12 +208,13 @@ def main():
 
     server_socket = socket.create_server(("localhost", 4221))
 
+
     while True:
         conn, addr = server_socket.accept()  # wait for client
 
-        process = Process(target=handle_client, args=(conn, addr))
-        process.start()
-        conn.close()
+        threading.Thread(target=handle_client, args=(conn, )).start()
+        print("Started thread for client:", addr)
+
 
 
 if __name__ == "__main__":
