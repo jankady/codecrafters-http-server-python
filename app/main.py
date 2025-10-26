@@ -2,7 +2,7 @@ import argparse
 import socket  # noqa: F401
 from multiprocessing import Process
 import os
-
+import gzip
 
 def check_file_exists(path_to_file, directory):
     get_file = os.path.basename(path_to_file)
@@ -49,6 +49,10 @@ def validate_encoding(encoding_type):
     return result
 
 
+def gzip_encode(data):
+    compressed_data = gzip.compress(data.encode())
+    return compressed_data
+
 def generate_response(http_method, http_full_path, http_version, host,
                       content_type, content_length, user_agent, request_body, directory, encoding_type):
     http_response = ""
@@ -83,14 +87,14 @@ def generate_response(http_method, http_full_path, http_version, host,
                             content_encoding+= encoding_list[i]
                         else:
                             content_encoding+= encoding_list[i]+", "
-
+                    compresed_body = gzip_encode(response_body)
                     http_response = (
                         f"{http_version} {http_code}\r\n"
                         f"Content-Encoding: {content_encoding}\r\n"
                         f"Content-Type: {content_type}\r\n"
-                        f"Content-Length: {content_length}\r\n"
+                        f"Content-Length: {len(compresed_body)}\r\n"
                         f"\r\n"
-                        f"{response_body}"
+                        f"{compresed_body}"
                     )
                 else:
                     http_response = (
