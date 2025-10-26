@@ -176,18 +176,24 @@ def parse_request(request):
 
 
 def handle_client(conn, addr):
-    data = conn.recv(1024).decode().strip()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--directory", help="Host directory filepath")
     args = parser.parse_args()
 
-    (http_method, http_full_path, http_version, host, content_type, content_length, user_agent,
-     request_body, encoding_type) = parse_request(data)
+    while True:
+        data = conn.recv(1024).decode().strip()
+        if not data:
+            break
 
-    http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
-                                      content_length, user_agent, request_body, args.directory, encoding_type)
+        (http_method, http_full_path, http_version, host, content_type, content_length, user_agent,
+         request_body, encoding_type) = parse_request(data)
 
-    conn.send(http_response)
+        http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
+                                          content_length, user_agent, request_body, args.directory, encoding_type)
+
+        conn.send(http_response)
+
     conn.close()
 
 
