@@ -54,7 +54,12 @@ def gzip_encode(data):
     return compressed_data
 
 def generate_response(http_method, http_full_path, http_version, host,
-                      content_type, content_length, user_agent, request_body, directory, encoding_type):
+                      content_type, content_length, user_agent, request_body, directory, encoding_type, connection):
+
+    connection_close = ""
+    if connection == "close":
+        connection_close = "Connection: close\r\n"
+
     http_response = b""
     match http_method:
         case "GET":
@@ -70,6 +75,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                     f"{http_version} {http_code}\r\n"
                     f"Content-Type: {content_type}\r\n"
                     f"Content-Length: {content_length}\r\n"
+                    f"{connection_close}"
                     f"\r\n"
                     f"{response_body}"
                 ).encode()
@@ -89,6 +95,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                         f"Content-Encoding: {content_encoding}\r\n"
                         f"Content-Type: {content_type}\r\n"
                         f"Content-Length: {len(compresed_body)}\r\n"
+                        f"{connection_close}"
                         f"\r\n"
                     ).encode() + compresed_body
                 else:
@@ -96,6 +103,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                         f"{http_version} {http_code}\r\n"
                         f"Content-Type: {content_type}\r\n"
                         f"Content-Length: {content_length}\r\n"
+                        f"{connection_close}"
                         f"\r\n"
                         f"{response_body}"
                     ).encode()
@@ -109,6 +117,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                     f"{http_version} {http_code}\r\n"
                     f"Content-Type: {content_type}\r\n"
                     f"Content-Length: {content_length}\r\n"
+                    f"{connection_close}"
                     f"\r\n"
                     f"{response_body}"
                 ).encode()
@@ -117,12 +126,14 @@ def generate_response(http_method, http_full_path, http_version, host,
 
                 http_response = (
                     f"{http_version} {http_code}\r\n"
+                    f"{connection_close}"
                     f"\r\n"
                 ).encode()
             else:
                 http_code = "404 Not Found"
                 http_response = (
                     f"{http_version} {http_code}\r\n\r\n"
+                    f"{connection_close}"
                 ).encode()
 
         case "POST":
@@ -131,6 +142,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                 http_code = "201 Created"
                 http_response = (
                     f"{http_version} {http_code}\r\n"
+                    f"{connection_close}"
                     f"\r\n"
                 ).encode()
 
@@ -138,6 +150,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                 http_code = "404 Not Found"
                 http_response = (
                     f"{http_version} {http_code}\r\n\r\n"
+                    f"{connection_close}"
                 ).encode()
 
     return http_response
@@ -155,6 +168,7 @@ def parse_request(request):
     content_type = None
     user_agent = None
     encoding_type = []
+    connection = None
     for header in sections[1:]:
         if header == "":
             break
@@ -170,9 +184,11 @@ def parse_request(request):
         elif header.lower().startswith("accept-encoding:"):
             for enc in header.split(" ", 1)[1].strip().split(","):
                 encoding_type.append(enc.strip())
+        elif header.lower().startswith("connection:"):
+            connection = header.split(" ", 1)[1].strip()
 
     request_body = request.split("\r\n\r\n")[1] if "\r\n\r\n" in request else None
-    return method, path, version, header_host, content_type, content_length, user_agent, request_body, encoding_type
+    return method, path, version, header_host, content_type, content_length, user_agent, request_body, encoding_type, connection
 
 
 def handle_client(conn):
@@ -184,19 +200,19 @@ def handle_client(conn):
     while True:
         data = conn.recv(1024).decode().strip()
         if not data:
-            print("1 No data received, closing connection.")
+            print("1) Connection closed")
             break
 
         (http_method, http_full_path, http_version, host, content_type, content_length, user_agent,
-         request_body, encoding_type) = parse_request(data)
+         request_body, encoding_type, connection) = parse_request(data)
 
         http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
-                                          content_length, user_agent, request_body, args.directory, encoding_type)
+                                          content_length, user_agent, request_body, args.directory, encoding_type, connection)
 
         conn.sendall(http_response)
 
-        if "Connection: close" in data:
-            print("2 Connection close detected, closing connection.")
+        if connection == "close":
+            print("2) Connection close detected, closing connection.")
             break
 
     conn.close()
