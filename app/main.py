@@ -50,12 +50,12 @@ def validate_encoding(encoding_type):
 
 
 def gzip_encode(data):
-    compressed_data = gzip.compress(data.encode())
+    compressed_data = gzip.compress(data if isinstance(data, bytes) else data.encode())
     return compressed_data
 
 def generate_response(http_method, http_full_path, http_version, host,
                       content_type, content_length, user_agent, request_body, directory, encoding_type):
-    http_response = ""
+    http_response = b""
     match http_method:
         case "GET":
             if check_file_exists(http_full_path, directory):
@@ -72,7 +72,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                     f"Content-Length: {content_length}\r\n"
                     f"\r\n"
                     f"{response_body}"
-                )
+                ).encode()
 
             elif http_full_path.split("/")[1] == "echo":
                 http_code = "200 OK"
@@ -80,13 +80,9 @@ def generate_response(http_method, http_full_path, http_version, host,
                 content_length = len(http_full_path.split("/")[2])
                 response_body = http_full_path.split("/")[2]
                 encoding_list = validate_encoding(encoding_type)
-                if encoding_list is not []:
-                    content_encoding = ""
-                    for i in range(len(encoding_list)):
-                        if len(encoding_list) -1 == i:
-                            content_encoding+= encoding_list[i]
-                        else:
-                            content_encoding+= encoding_list[i]+", "
+
+                if len(encoding_list) > 0:
+                    content_encoding = ", ".join(encoding_list)
                     compresed_body = gzip_encode(response_body)
                     http_response = (
                         f"{http_version} {http_code}\r\n"
@@ -94,8 +90,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                         f"Content-Type: {content_type}\r\n"
                         f"Content-Length: {len(compresed_body)}\r\n"
                         f"\r\n"
-                        f"{compresed_body}"
-                    )
+                    ).encode() + compresed_body
                 else:
                     http_response = (
                         f"{http_version} {http_code}\r\n"
@@ -103,7 +98,7 @@ def generate_response(http_method, http_full_path, http_version, host,
                         f"Content-Length: {content_length}\r\n"
                         f"\r\n"
                         f"{response_body}"
-                    )
+                    ).encode()
 
             elif user_agent is not None:
                 http_code = "200 OK"
@@ -116,19 +111,19 @@ def generate_response(http_method, http_full_path, http_version, host,
                     f"Content-Length: {content_length}\r\n"
                     f"\r\n"
                     f"{response_body}"
-                )
+                ).encode()
             elif http_full_path == "/":
                 http_code = "200 OK"
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"\r\n"
                     f"{request_body}"
-                )
+                ).encode()
             else:
                 http_code = "404 Not Found"
                 http_response = (
                     f"{http_version} {http_code}\r\n\r\n"
-                )
+                ).encode()
 
         case "POST":
             if check_directory_exists(directory):
@@ -137,13 +132,13 @@ def generate_response(http_method, http_full_path, http_version, host,
                 http_response = (
                     f"{http_version} {http_code}\r\n"
                     f"\r\n"
-                )
+                ).encode()
 
             else:
                 http_code = "404 Not Found"
                 http_response = (
                     f"{http_version} {http_code}\r\n\r\n"
-                )
+                ).encode()
 
     return http_response
 
@@ -192,7 +187,7 @@ def handle_client(conn, addr):
     http_response = generate_response(http_method, http_full_path, http_version, host, content_type,
                                       content_length, user_agent, request_body, args.directory, encoding_type)
 
-    conn.send(http_response.encode())
+    conn.send(http_response)
     conn.close()
 
 
@@ -200,7 +195,7 @@ def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
 
-    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
+    server_socket = socket.create_server(("localhost", 4221))
 
     while True:
         conn, addr = server_socket.accept()  # wait for client
